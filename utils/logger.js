@@ -1,59 +1,54 @@
-const debug = require('debug');
+require('colors');
+const util = require('util');
+const { createLogger, format, transports } = require('winston');
 
-const AppLogger = debug('Api');
+const { combine, timestamp, printf } = format;
 
-// logger.log('@func() mymsg');
-// logger.log('@func() mymsg  [error: %s]' , err.message);
-module.exports = extendName => {
-  const logger = {};
+const customFormat = printf(
+   ({ message, moduleName, timestamp }) =>
+      `${timestamp} [${moduleName}] [${process.env.NODE_ENV}]: ${message}`
+         .magenta,
+);
 
-  // types
-  const log = AppLogger.extend(
-    `${extendName}:LOG <pid : ${process.pid}> <${process.env.NODE_ENV}>`,
-  );
-  const warn = AppLogger.extend(
-    `${extendName}:WARN <pid : ${process.pid}> <${process.env.NODE_ENV}>`,
-  );
-  const debug = AppLogger.extend(
-    `${extendName}:DEBUG <pid : ${process.pid}> <${process.env.NODE_ENV}>`,
-  );
-  const error = AppLogger.extend(
-    `${extendName}:ERROR <pid : ${process.pid}> <${process.env.NODE_ENV}>`,
-  );
+const winstonLogger = createLogger({
+   format: combine(
+      timestamp({ format: 'YYYY-MM-DD hh:mm:ss A' }),
+      customFormat,
+   ),
+});
 
-  // overriding
-  log.log = console.log.bind(console);
-  warn.log = console.log.bind(console);
-  debug.log = console.log.bind(console);
-  error.log = console.error.bind(console);
+if (process.env.NODE_ENV !== 'production') {
+   winstonLogger.add(new transports.Console());
+}
 
-  // LOG
-  logger.log = function(...args) {
-    if (process.env.NODE_ENV !== 'test') {
-      log(...args);
-    }
-  };
+if (process.env.NODE_ENV === 'production') {
+   winstonLogger.add(
+      new transports.File({ filename: 'error.log', level: 'error' }),
+   );
+   winstonLogger.add(
+      new transports.File({ filename: 'out.log', level: 'info' }),
+   );
+}
 
-  // WARN
-  logger.warn = function(...args) {
-    if (process.env.NODE_ENV !== 'test') {
-      warn(...args);
-    }
-  };
+module.exports = moduleName => {
+   const childLogger = winstonLogger.child({ moduleName });
+   const logger = {};
 
-  // DEBUG
-  logger.debug = function(...args) {
-    if (process.env.NODE_ENV === 'development') {
-      debug(...args);
-    }
-  };
+   // LOG
+   logger.log = message => {
+      childLogger.info(message);
+   };
 
-  // ERROR
-  logger.error = function(...args) {
-    if (process.env.NODE_ENV !== 'test') {
-      error(...args);
-    }
-  };
+   // ERROR
+   logger.error = (message, object = null) => {
+      if (object) {
+         childLogger.error(
+            util.formatWithOptions({ colors: true }, `${message}`, object),
+         );
+      } else {
+         childLogger.error(message);
+      }
+   };
 
-  return logger;
+   return logger;
 };
