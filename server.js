@@ -3,8 +3,9 @@ require('dotenv').config();
 
 const express = require('express');
 const morgan = require('morgan');
+const router = require('./routes');
 const logger = require('./utils/logger')('Server');
-
+const routers = require('./routes')
 const app = express();
 
 app.use(express.json());
@@ -25,6 +26,9 @@ if (process.env.NODE_ENV === 'development') {
     )
   );
 }
+
+// routes
+app.use(routers);
 
 // Port
 const port = process.env.PORT || '3000';
